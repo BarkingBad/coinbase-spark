@@ -1,8 +1,6 @@
 package pl.edu.agh
 
 import java.util.concurrent.atomic.AtomicBoolean
-
-
 import javax.annotation.concurrent.GuardedBy
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
@@ -12,20 +10,29 @@ import org.apache.spark.sql.connector.read.{
   PartitionReader,
   PartitionReaderFactory
 }
+
 import java.nio.ByteBuffer
 import java.util.concurrent.{ArrayBlockingQueue, BlockingQueue, TimeUnit}
 import org.apache.spark.sql.execution.streaming.LongOffset
-import pl.edu.agh.model.OpenAQMessage
+import pl.edu.agh.model.{
+  Channel,
+  OpenAQMessage,
+  Parser,
+  ProtocolMessage,
+  Serializer
+}
 import org.apache.spark.sql.Encoders
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import okhttp3._
 import okio.ByteString
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-import pl.edu.agh.model.Parser
+import scala.util.Try
 
 case class WSMicroBatchStreamer(
-    numPartitions: Int
+    numPartitions: Int,
+    websocketUrl: String = "wss://ws-feed.exchange.coinbase.com"
 ) extends MicroBatchStream
     with Logging {
 
@@ -42,7 +49,8 @@ case class WSMicroBatchStreamer(
   private val batches = new ListBuffer[(OpenAQMessage, Long)]
 
   @GuardedBy("this")
-  protected val messageQueue: BlockingQueue[(OpenAQMessage, Long)] = new ArrayBlockingQueue[(OpenAQMessage, Long)](1000)
+  protected val messageQueue: BlockingQueue[(OpenAQMessage, Long)] =
+    new ArrayBlockingQueue[(OpenAQMessage, Long)](1000)
 
   @GuardedBy("this")
   @transient
@@ -52,69 +60,110 @@ case class WSMicroBatchStreamer(
   @transient
   var worker: Option[Thread] = None
 
-  private def initialize(): Unit = synchronized {
+  private def initialize(): Unit =
+    synchronized {
+      var initialMessageProcessed: Boolean = false
 
-    val client = new OkHttpClient.Builder()
-      .readTimeout(0, TimeUnit.MILLISECONDS)
-      .build()
+      val client = new OkHttpClient.Builder()
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .build()
 
-    val ws = client.newWebSocket(new Request.Builder()
-      .url("wss://ws-feed.exchange.coinbase.com")
-      .build(), new WebSocketListener {
+      val ws = client.newWebSocket(
+        new Request.Builder()
+          .url(websocketUrl)
+          .build(),
+        new WebSocketListener {
 
-      override def onOpen(webSocket: WebSocket, response: Response): Unit = {
-        log.debug("Opened websocket connection...")
-        // Send out initial messages which we will get echoed back
-        webSocket.send("""{"type":"subscribe","channels":[{"name":"ticker","product_ids":["ETH-BTC","ETH-USD"]}]}""")
-      }
+          override def onOpen(
+              webSocket: WebSocket,
+              response: Response
+          ): Unit = {
+            log.debug("Opened websocket connection...")
+            // Send out initial messages which we will get echoed back
+            val subscribeMessage = ProtocolMessage(
+              "subscribe",
+              List(Channel("ticker", List("ETH-BTC", "ETH-USD")))
+            )
+            webSocket.send(Serializer(subscribeMessage))
+          }
 
-      override def onClosed(webSocket: WebSocket, code: Int, reason: String): Unit = {
-        log.info(s"Websocket closed: $reason ($code) ")
-        if(socket.isDefined) {
-          log.warn("Attempting to reconnect in 1s...")
-          Thread.sleep(1000)
-          initialize()
+          override def onClosed(
+              webSocket: WebSocket,
+              code: Int,
+              reason: String
+          ): Unit = {
+            log.info(s"Websocket closed: $reason ($code) ")
+            if (code == 1000) {
+              val unsubscribeMessage =
+                ProtocolMessage("unsubscribe", List(Channel("ticker")))
+              Try(webSocket.send(Serializer(unsubscribeMessage)))
+            } else if (socket.isDefined) {
+              log.warn("Attempting to reconnect in 1s...")
+              Thread.sleep(1000)
+              initialize()
+            }
+          }
+
+          override def onFailure(
+              webSocket: WebSocket,
+              t: Throwable,
+              response: Response
+          ): Unit = {
+            log.warn(s"Websocket failed: $response\n${t.getMessage}", t)
+            if (socket.isDefined) {
+              log.warn("Attempting to reconnect in 1s...")
+              Thread.sleep(1000)
+              initialize()
+            }
+          }
+
+          override def onMessage(webSocket: WebSocket, str: String): Unit = {
+            if (!initialMessageProcessed) handleProtocolMessage(str)
+            else handleDataMessage(str)
+          }
+
+          def handleProtocolMessage(message: String): Unit =
+            Parser[ProtocolMessage](message) match {
+              case Left(exception) =>
+                log.warn(
+                  "Failed to subscribe to websocket: " + exception.getMessage + " \n message: " + message
+                )
+                throw exception
+              case Right(_) =>
+                initialMessageProcessed = true
+                log.info("Successfully subscribed to websocket")
+            }
+
+          def handleDataMessage(message: String): Unit =
+            Parser[OpenAQMessage](message) match {
+              case Right(message) =>
+                currentOffset = currentOffset + 1
+                messageQueue.put((message, currentOffset.offset))
+              case Left(exception) =>
+                log.warn("Expected OpenAQMessage but got " + exception)
+            }
         }
-      }
+      )
 
-      override def onFailure(webSocket: WebSocket, t: Throwable, response: Response): Unit = {
-        log.warn(s"Websocket failed: $response\n${t.getMessage}", t)
-        if(socket.isDefined) {
-          log.warn("Attempting to reconnect in 1s...")
-          Thread.sleep(1000)
-          initialize()
-        }
-      }
+      socket = Some(ws)
 
-      override def onMessage(webSocket: WebSocket, str: String): Unit = {
-        Parser(str) match {
-          case Right(message) => 
-            currentOffset = currentOffset.+(1)
-            messageQueue.put((message, currentOffset.offset))
-          case Left(exception) => 
-            log.warn("Expected WsMessage bug got " + exception)
-        }
-      }
-    })
+      worker = {
+        val thread = new Thread("Queue Worker") {
+          setDaemon(true)
 
-    socket = Some(ws)
-
-    worker = {
-      val thread = new Thread("Queue Worker") {
-        setDaemon(true)
-        override def run(): Unit = {
-          while(socket.isDefined) {
-            val event = messageQueue.poll(100, TimeUnit.MILLISECONDS)
-            if(event != null) {
-              batches.append(event)
+          override def run(): Unit = {
+            while (socket.isDefined && active) {
+              val event = messageQueue.poll(1000, TimeUnit.MILLISECONDS)
+              if (event != null) {
+                batches.append(event)
+              }
             }
           }
         }
+        thread.start()
+        Some(thread)
       }
-      thread.start()
-      Some(thread)
     }
-  }
 
   override def planInputPartitions(
       start: Offset,
@@ -174,7 +223,12 @@ case class WSMicroBatchStreamer(
   }
 
   override def stop(): Unit = {
+    log.info("Stopping streamer")
     active = false
+    socket.foreach(_.close(1000, "Closing websocket normally"))
+    if (worker.exists(_.isAlive)) {
+      worker.foreach(_.stop())
+    }
   }
 
   override def commit(end: Offset): Unit =

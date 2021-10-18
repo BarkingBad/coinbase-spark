@@ -16,15 +16,15 @@ class WSProvider extends DataSourceRegister with TableProvider with Logging {
 
   private val schema = StructType(
     StructField("type", StringType, true) ::
-    StructField("trade_id", LongType, true) ::
-    StructField("sequence", LongType, true) ::
-    StructField("time", StringType, true) ::
-    StructField("product_id", StringType, true) ::
-    StructField("price", DoubleType, true) ::
-    StructField("side", StringType, true) ::
-    StructField("last_size", DoubleType, true) ::
-    StructField("best_bid", DoubleType, true) ::
-    StructField("best_ask", DoubleType, true) :: Nil
+      StructField("trade_id", LongType, true) ::
+      StructField("sequence", LongType, true) ::
+      StructField("time", StringType, true) ::
+      StructField("product_id", StringType, true) ::
+      StructField("price", DoubleType, true) ::
+      StructField("side", StringType, true) ::
+      StructField("last_size", DoubleType, true) ::
+      StructField("best_bid", DoubleType, true) ::
+      StructField("best_ask", DoubleType, true) :: Nil
   )
 
   override def getTable(
