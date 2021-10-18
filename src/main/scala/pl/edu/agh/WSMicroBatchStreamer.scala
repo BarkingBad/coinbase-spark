@@ -2,14 +2,7 @@ package pl.edu.agh
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-import com.amazonaws.auth.{
-  AWSCredentials,
-  AWSStaticCredentialsProvider,
-  BasicAWSCredentials,
-  BasicSessionCredentials
-}
-import com.amazonaws.services.sqs.AmazonSQSClientBuilder
-import com.amazonaws.services.sqs.model.Message
+
 import javax.annotation.concurrent.GuardedBy
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
@@ -19,22 +12,20 @@ import org.apache.spark.sql.connector.read.{
   PartitionReader,
   PartitionReaderFactory
 }
+import java.nio.ByteBuffer
+import java.util.concurrent.{ArrayBlockingQueue, BlockingQueue, TimeUnit}
 import org.apache.spark.sql.execution.streaming.LongOffset
 import pl.edu.agh.model.OpenAQMessage
 import org.apache.spark.sql.Encoders
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-
+import okhttp3._
+import okio.ByteString
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import pl.edu.agh.model.Parser
 
-case class SQSMicroBatchStreamer(
-    numPartitions: Int,
-    accessKey: String,
-    secretKey: String,
-    maybeToken: Option[String],
-    region: String,
-    queueUrl: String
+case class WSMicroBatchStreamer(
+    numPartitions: Int
 ) extends MicroBatchStream
     with Logging {
 
@@ -50,44 +41,79 @@ case class SQSMicroBatchStreamer(
   @GuardedBy("this")
   private val batches = new ListBuffer[(OpenAQMessage, Long)]
 
-  private def initialize(): Unit = {
-    val sqsBuilder =
-      AmazonSQSClientBuilder
-        .standard()
-    sqsBuilder
-      .setRegion(region)
-    sqsBuilder
-      .setCredentials(
-        new AWSStaticCredentialsProvider(
-          maybeToken match {
-            case Some(token) =>
-              new BasicSessionCredentials(accessKey, secretKey, token)
-            case None => new BasicAWSCredentials(accessKey, secretKey)
-          }
-        )
-      )
+  @GuardedBy("this")
+  protected val messageQueue: BlockingQueue[(OpenAQMessage, Long)] = new ArrayBlockingQueue[(OpenAQMessage, Long)](1000)
 
-    val sqs = sqsBuilder.build()
+  @GuardedBy("this")
+  @transient
+  var socket: Option[WebSocket] = None
 
-    val messageReader = new Thread(() => {
-      while (active) {
-        val messages: Seq[Message] =
-          sqs.receiveMessage(queueUrl).getMessages.asScala
-        val orderedMessages = messages
-          .filter(x => Parser(x.getBody).isRight)
-          .map(message => {
+  @GuardedBy("this")
+  @transient
+  var worker: Option[Thread] = None
+
+  private def initialize(): Unit = synchronized {
+
+    val client = new OkHttpClient.Builder()
+      .readTimeout(0, TimeUnit.MILLISECONDS)
+      .build()
+
+    val ws = client.newWebSocket(new Request.Builder()
+      .url("wss://ws-feed.exchange.coinbase.com")
+      .build(), new WebSocketListener {
+
+      override def onOpen(webSocket: WebSocket, response: Response): Unit = {
+        log.debug("Opened websocket connection...")
+        // Send out initial messages which we will get echoed back
+        webSocket.send("""{"type":"subscribe","channels":[{"name":"ticker","product_ids":["ETH-BTC","ETH-USD"]}]}""")
+      }
+
+      override def onClosed(webSocket: WebSocket, code: Int, reason: String): Unit = {
+        log.info(s"Websocket closed: $reason ($code) ")
+        if(socket.isDefined) {
+          log.warn("Attempting to reconnect in 1s...")
+          Thread.sleep(1000)
+          initialize()
+        }
+      }
+
+      override def onFailure(webSocket: WebSocket, t: Throwable, response: Response): Unit = {
+        log.warn(s"Websocket failed: $response\n${t.getMessage}", t)
+        if(socket.isDefined) {
+          log.warn("Attempting to reconnect in 1s...")
+          Thread.sleep(1000)
+          initialize()
+        }
+      }
+
+      override def onMessage(webSocket: WebSocket, str: String): Unit = {
+        Parser(str) match {
+          case Right(message) => 
             currentOffset = currentOffset.+(1)
-            (s"${message.getBody}", currentOffset.offset)
-          })
-
-        batches.appendAll(
-          orderedMessages.map(x => (Parser(x._1).toOption.get, x._2))
-        )
-        messages.foreach(m => sqs.deleteMessage(queueUrl, m.getReceiptHandle))
-        Thread.sleep(100)
+            messageQueue.put((message, currentOffset.offset))
+          case Left(exception) => 
+            log.warn("Expected WsMessage bug got " + exception)
+        }
       }
     })
-    messageReader.start()
+
+    socket = Some(ws)
+
+    worker = {
+      val thread = new Thread("Queue Worker") {
+        setDaemon(true)
+        override def run(): Unit = {
+          while(socket.isDefined) {
+            val event = messageQueue.poll(100, TimeUnit.MILLISECONDS)
+            if(event != null) {
+              batches.append(event)
+            }
+          }
+        }
+      }
+      thread.start()
+      Some(thread)
+    }
   }
 
   override def planInputPartitions(
@@ -117,12 +143,12 @@ case class SQSMicroBatchStreamer(
         slices(idx % numPartitions).append(r)
     }
 
-    slices.map(SQSInputPartition)
+    slices.map(WSInputPartition)
   }
 
   override def createReaderFactory(): PartitionReaderFactory =
     (partition: InputPartition) => {
-      val slice = partition.asInstanceOf[SQSInputPartition].slice
+      val slice = partition.asInstanceOf[WSInputPartition].slice
       new PartitionReader[InternalRow] {
         private var currentIdx = -1
 
@@ -176,5 +202,5 @@ case class SQSMicroBatchStreamer(
   }
 }
 
-case class SQSInputPartition(slice: ListBuffer[(OpenAQMessage, Long)])
+case class WSInputPartition(slice: ListBuffer[(OpenAQMessage, Long)])
     extends InputPartition

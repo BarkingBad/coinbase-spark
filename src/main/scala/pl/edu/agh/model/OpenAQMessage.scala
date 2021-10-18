@@ -4,13 +4,14 @@ import io.circe.generic.JsonCodec
 
 @JsonCodec
 case class OpenAQMessage(
-    date: Option[DateStruct],
-    parameter: Option[String],
-    value: Option[Double],
-    unit: Option[String],
-    averagingPeriod: Option[PeriodStruct],
-    location: Option[String],
-    city: Option[String],
-    country: Option[String],
-    coordinates: Option[Coordinates]
+    `type`: Option[String],
+    trade_id: Option[Long],
+    sequence: Option[Long],
+    time: Option[String],
+    product_id: Option[String],
+    price: Option[Double],
+    side: Option[String],
+    last_size: Option[Double],
+    best_bid: Option[Double],
+    best_ask: Option[Double]
 )

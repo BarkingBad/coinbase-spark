@@ -14,7 +14,8 @@ lazy val root = (project in file("."))
       "io.circe" %% "circe-parser" % circeVersion,
       "org.scalatest" %% "scalatest" % "3.2.2" % "test",
       "org.apache.spark" %% "spark-sql" % "3.0.1" % "provided",
-      "org.apache.spark" %% "spark-streaming" % "3.0.1" % "provided"
+      "org.apache.spark" %% "spark-streaming" % "3.0.1" % "provided",
+      "com.squareup.okhttp3" % "okhttp" % "4.6.0",
     )
   )
 

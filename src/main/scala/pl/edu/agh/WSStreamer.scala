@@ -14,11 +14,11 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import scala.collection.JavaConverters._
 
-class SQSStreamer(val schema: StructType, numPartitions: Int)
+class WSStreamer(val schema: StructType, numPartitions: Int)
     extends Table
     with SupportsRead {
 
-  override def name(): String = "sqs://..."
+  override def name(): String = "ws://..."
 
   override def capabilities(): util.Set[TableCapability] = {
     Set(
@@ -34,15 +34,8 @@ class SQSStreamer(val schema: StructType, numPartitions: Int)
         override def toMicroBatchStream(
             checkpointLocation: String
         ): MicroBatchStream = {
-          SQSMicroBatchStreamer(
-            numPartitions,
-            options.get("accessKey"),
-            options.get("secretKey"),
-            if (options.containsKey("sessionToken")) {
-              Some(options.get("sessionToken"))
-            } else { None },
-            options.get("region"),
-            options.get("queueUrl")
+          WSMicroBatchStreamer(
+            numPartitions
           )
         }
       }
