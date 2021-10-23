@@ -3,7 +3,7 @@ package pl.edu.agh.model
 import io.circe.generic.JsonCodec
 
 @JsonCodec
-case class OpenAQMessage(
+case class TickerMessage(
     `type`: Option[String],
     trade_id: Option[Long],
     sequence: Option[Long],

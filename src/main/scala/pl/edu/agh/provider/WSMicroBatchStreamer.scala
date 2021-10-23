@@ -1,4 +1,4 @@
-package pl.edu.agh
+package pl.edu.agh.provider
 
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.annotation.concurrent.GuardedBy
@@ -14,13 +14,7 @@ import org.apache.spark.sql.connector.read.{
 import java.nio.ByteBuffer
 import java.util.concurrent.{ArrayBlockingQueue, BlockingQueue, TimeUnit}
 import org.apache.spark.sql.execution.streaming.LongOffset
-import pl.edu.agh.model.{
-  Channel,
-  OpenAQMessage,
-  Parser,
-  ProtocolMessage,
-  Serializer
-}
+import pl.edu.agh.model._
 import org.apache.spark.sql.Encoders
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import okhttp3._
@@ -29,11 +23,15 @@ import okio.ByteString
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.util.Try
+import io.circe.Decoder
+import io.circe.Encoder
+import reflect.runtime.universe.TypeTag
 
-case class WSMicroBatchStreamer(
+case class WSMicroBatchStreamer[T <: Product: TypeTag](
     numPartitions: Int,
+    schemaTag: String,
     websocketUrl: String = "wss://ws-feed.exchange.coinbase.com"
-) extends MicroBatchStream
+)(implicit decoder: Decoder[T], encoder: Encoder[T]) extends MicroBatchStream
     with Logging {
 
   private var currentOffset = LongOffset(-1)
@@ -46,11 +44,11 @@ case class WSMicroBatchStreamer(
   private val initialized: AtomicBoolean = new AtomicBoolean(false)
 
   @GuardedBy("this")
-  private val batches = new ListBuffer[(OpenAQMessage, Long)]
+  private val batches = new ListBuffer[(T, Long)]
 
   @GuardedBy("this")
-  protected val messageQueue: BlockingQueue[(OpenAQMessage, Long)] =
-    new ArrayBlockingQueue[(OpenAQMessage, Long)](1000)
+  protected val messageQueue: BlockingQueue[(T, Long)] =
+    new ArrayBlockingQueue[(T, Long)](1000)
 
   @GuardedBy("this")
   @transient
@@ -80,11 +78,19 @@ case class WSMicroBatchStreamer(
           ): Unit = {
             log.debug("Opened websocket connection...")
             // Send out initial messages which we will get echoed back
-            val subscribeMessage = ProtocolMessage(
-              "subscribe",
-              List(Channel("ticker", List("ETH-BTC", "ETH-USD")))
-            )
-            webSocket.send(Serializer(subscribeMessage))
+            // val subscribeMessage = ProtocolMessage(
+            //   "subscribe",
+            //   List(Channel("ticker", List("ETH-BTC", "ETH-USD")))
+            // )
+            // webSocket.send(Serializer(subscribeMessage))
+            val jsonToSubscribe = schemaTag match {
+              case "heartbeat" => """{"type": "subscribe","channels": [{ "name": "heartbeat", "product_ids": ["ETH-EUR"] }]}"""
+              case "status" => ""
+              case "ticker" => """{"type": "subscribe","channels": [{"name": "ticker","product_ids": ["ETH-BTC","ETH-USD"]}]}"""
+              case "level2" => ""
+              case "auction" => """{"type": "auction","channels": [{ "name": "auctionfeed"}]}"""
+            }
+            webSocket.send(jsonToSubscribe)
           }
 
           override def onClosed(
@@ -135,12 +141,12 @@ case class WSMicroBatchStreamer(
             }
 
           def handleDataMessage(message: String): Unit =
-            Parser[OpenAQMessage](message) match {
+            Parser[T](message) match {
               case Right(message) =>
                 currentOffset = currentOffset + 1
                 messageQueue.put((message, currentOffset.offset))
               case Left(exception) =>
-                log.warn("Expected OpenAQMessage but got " + exception)
+                log.warn("Expected T but got " + exception)
             }
         }
       )
@@ -185,19 +191,19 @@ case class WSMicroBatchStreamer(
     }
 
     val slices =
-      Array.fill(numPartitions)(new ListBuffer[(OpenAQMessage, Long)])
+      Array.fill(numPartitions)(new ListBuffer[(T, Long)])
 
     rawList.zipWithIndex.foreach {
       case (r, idx) =>
         slices(idx % numPartitions).append(r)
     }
 
-    slices.map(WSInputPartition)
+    slices.map(WSInputPartition[T])
   }
 
   override def createReaderFactory(): PartitionReaderFactory =
     (partition: InputPartition) => {
-      val slice = partition.asInstanceOf[WSInputPartition].slice
+      val slice = partition.asInstanceOf[WSInputPartition[T]].slice
       new PartitionReader[InternalRow] {
         private var currentIdx = -1
 
@@ -215,10 +221,10 @@ case class WSMicroBatchStreamer(
       }
     }
 
-  private def encodeMessage(message: OpenAQMessage): InternalRow = {
-    val messageEncoder = Encoders.product[OpenAQMessage]
+  private def encodeMessage(message: T): InternalRow = {
+    val messageEncoder = Encoders.product[T]
     val messageExprEncoder =
-      messageEncoder.asInstanceOf[ExpressionEncoder[OpenAQMessage]]
+      messageEncoder.asInstanceOf[ExpressionEncoder[T]]
     messageExprEncoder.createSerializer()(message)
   }
 
@@ -256,5 +262,5 @@ case class WSMicroBatchStreamer(
   }
 }
 
-case class WSInputPartition(slice: ListBuffer[(OpenAQMessage, Long)])
+case class WSInputPartition[T](slice: ListBuffer[(T, Long)])
     extends InputPartition

@@ -1,4 +1,4 @@
-package pl.edu.agh
+package pl.edu.agh.provider
 
 import java.util
 
@@ -13,8 +13,9 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import scala.collection.JavaConverters._
+import pl.edu.agh.model._
 
-class WSStreamer(val schema: StructType, numPartitions: Int)
+class WSStreamer(val schema: StructType, numPartitions: Int, schemaTag: String)
     extends Table
     with SupportsRead {
 
@@ -27,16 +28,21 @@ class WSStreamer(val schema: StructType, numPartitions: Int)
   }
 
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder =
-    () =>
+    () => {
+      val wsMicroBatchStreamer = schemaTag match {
+        case "heartbeat" => WSMicroBatchStreamer[HeartbeatMessage](numPartitions, schemaTag)
+        case "status" => WSMicroBatchStreamer[StatusMessage](numPartitions, schemaTag)
+        case "ticker" => WSMicroBatchStreamer[TickerMessage](numPartitions, schemaTag)
+        case "level2" => WSMicroBatchStreamer[Level2Message](numPartitions, schemaTag)
+        case "auction" => WSMicroBatchStreamer[AuctionMessage](numPartitions, schemaTag)
+      }
       new Scan {
         override def readSchema(): StructType = schema
 
         override def toMicroBatchStream(
             checkpointLocation: String
-        ): MicroBatchStream = {
-          WSMicroBatchStreamer(
-            numPartitions
-          )
-        }
+        ): MicroBatchStream = 
+          wsMicroBatchStreamer
       }
+    }
 }
