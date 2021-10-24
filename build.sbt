@@ -6,15 +6,15 @@ val circeVersion = "0.12.3"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "openaq-streamer",
+    name := "coinbase-spark",
     libraryDependencies ++= Seq(
       "com.amazonaws" % "aws-java-sdk-sqs" % "1.11.897",
       "io.circe" %% "circe-core" % circeVersion,
       "io.circe" %% "circe-generic" % circeVersion,
       "io.circe" %% "circe-parser" % circeVersion,
       "org.scalatest" %% "scalatest" % "3.2.2" % "test",
-      "org.apache.spark" %% "spark-sql" % "3.0.1" % "provided",
-      "org.apache.spark" %% "spark-streaming" % "3.0.1" % "provided",
+      "org.apache.spark" %% "spark-sql" % "3.2.0" % "provided",
+      "org.apache.spark" %% "spark-streaming" % "3.2.0" % "provided",
       "com.squareup.okhttp3" % "okhttp" % "4.6.0",
     )
   )

@@ -5,7 +5,7 @@ USER root
 
 FROM base AS builder
 
-WORKDIR /openaq-streamer
+WORKDIR /coinbase-spark
 
 COPY . .
 
@@ -18,9 +18,9 @@ RUN apt-get update && apt-get install gnupg2 -y && \
 RUN sbt update #prefetch dependencies & sbt
 
 RUN sbt clean assembly && \
-    echo "spark.jars ${HOME}/openaq-streamer/target/scala-2.12/openaq-streammer-assembly-0.1.0-SNAPSHOT.jar" > /usr/local/spark/conf/spark-defaults.conf
+    echo "spark.jars ${HOME}/coinbase-spark/target/scala-2.12/coinbase-spark-assembly-0.1.0-SNAPSHOT.jar" > /usr/local/spark/conf/spark-defaults.conf
 
 FROM base
 
-COPY --from=builder /openaq-streamer/target/scala-2.12/openaq-streamer-assembly-0.1.0-SNAPSHOT.jar /usr/local/spark/jars
+COPY --from=builder /coinbase-spark/target/scala-2.12/coinbase-spark-assembly-0.1.0-SNAPSHOT.jar /usr/local/spark/jars
 COPY Notebook.ipynb work/

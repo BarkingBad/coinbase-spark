@@ -22,7 +22,7 @@ import okio.ByteString
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-import scala.util.Try
+import scala.util.{Try, Success, Failure}
 import io.circe.Decoder
 import io.circe.Encoder
 import reflect.runtime.universe.TypeTag
@@ -146,7 +146,7 @@ case class WSMicroBatchStreamer[T <: Product: TypeTag](
                 currentOffset = currentOffset + 1
                 messageQueue.put((message, currentOffset.offset))
               case Left(exception) =>
-                log.warn("Expected T but got " + exception)
+                log.warn("Couldn't parse message " + message)
             }
         }
       )
@@ -159,10 +159,15 @@ case class WSMicroBatchStreamer[T <: Product: TypeTag](
 
           override def run(): Unit = {
             while (socket.isDefined && active) {
-              val event = messageQueue.poll(1000, TimeUnit.MILLISECONDS)
-              if (event != null) {
-                batches.append(event)
+              Try(messageQueue.poll(1000, TimeUnit.MILLISECONDS)) match {
+                case Success(event) => 
+                  if (event != null) {
+                    batches.append(event)
+                  }
+                case Failure(_) => 
+                  log.warn("MessageQueue was interrupted")
               }
+              
             }
           }
         }
@@ -233,8 +238,10 @@ case class WSMicroBatchStreamer[T <: Product: TypeTag](
     active = false
     socket.foreach(_.close(1000, "Closing websocket normally"))
     if (worker.exists(_.isAlive)) {
+      Try(worker.foreach(_.join()))
       worker.foreach(_.stop())
     }
+    log.info("Streamer stopped succesfully")
   }
 
   override def commit(end: Offset): Unit =
