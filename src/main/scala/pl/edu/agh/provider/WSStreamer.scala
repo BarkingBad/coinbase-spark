@@ -30,11 +30,11 @@ class WSStreamer(val schema: StructType, numPartitions: Int, schemaTag: String)
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder =
     () => {
       val wsMicroBatchStreamer = schemaTag match {
-        case "heartbeat" => WSMicroBatchStreamer[HeartbeatMessage](numPartitions, schemaTag)
-        case "status" => WSMicroBatchStreamer[StatusMessage](numPartitions, schemaTag)
-        case "ticker" => WSMicroBatchStreamer[TickerMessage](numPartitions, schemaTag)
-        case "level2" => WSMicroBatchStreamer[Level2Message](numPartitions, schemaTag)
-        case "auction" => WSMicroBatchStreamer[AuctionMessage](numPartitions, schemaTag)
+        case "heartbeat" => WSMicroBatchStreamer[HeartbeatMessage](numPartitions, schemaTag, options.getOrDefault("url", "wss://ws-feed.exchange.coinbase.com"))
+        case "status" => WSMicroBatchStreamer[StatusMessage](numPartitions, schemaTag,options.getOrDefault("url", "wss://ws-feed.exchange.coinbase.com"))
+        case "ticker" => WSMicroBatchStreamer[TickerMessage](numPartitions, schemaTag, options.getOrDefault("url", "wss://ws-feed.exchange.coinbase.com"))
+        case "level2" => WSMicroBatchStreamer[Level2Message](numPartitions, schemaTag, options.getOrDefault("url", "wss://ws-feed.exchange.coinbase.com"))
+        case "auction" => WSMicroBatchStreamer[AuctionMessage](numPartitions, schemaTag, options.getOrDefault("url", "wss://ws-feed.exchange.coinbase.com"))
       }
       new Scan {
         override def readSchema(): StructType = schema

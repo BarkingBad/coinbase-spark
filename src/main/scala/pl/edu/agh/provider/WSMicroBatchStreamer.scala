@@ -30,7 +30,7 @@ import reflect.runtime.universe.TypeTag
 case class WSMicroBatchStreamer[T <: Product: TypeTag](
     numPartitions: Int,
     schemaTag: String,
-    websocketUrl: String = "wss://ws-feed.exchange.coinbase.com"
+    websocketUrl: String
 )(implicit decoder: Decoder[T], encoder: Encoder[T]) extends MicroBatchStream
     with Logging {
 
@@ -116,7 +116,7 @@ case class WSMicroBatchStreamer[T <: Product: TypeTag](
               response: Response
           ): Unit = {
             log.warn(s"Websocket failed: $response\n${t.getMessage}", t)
-            if (socket.isDefined) {
+            if (socket.isDefined && active) {
               log.warn("Attempting to reconnect in 1s...")
               Thread.sleep(1000)
               initialize()

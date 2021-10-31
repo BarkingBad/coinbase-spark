@@ -6,4 +6,5 @@ target
 project/.bloop
 project/project
 project/target
-.bsp
+.bsp/
+.scala/
