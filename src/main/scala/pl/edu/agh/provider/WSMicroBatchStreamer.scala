@@ -115,7 +115,7 @@ case class WSMicroBatchStreamer[T <: Product: TypeTag](
               t: Throwable,
               response: Response
           ): Unit = {
-            log.warn(s"Websocket failed: $response\n${t.getMessage}", t)
+            log.warn(s"Websocket failed: ${t.getMessage}")
             if (socket.isDefined && active) {
               log.warn("Attempting to reconnect in 1s...")
               Thread.sleep(1000)
@@ -134,7 +134,6 @@ case class WSMicroBatchStreamer[T <: Product: TypeTag](
                 log.warn(
                   "Failed to subscribe to websocket: " + exception.getMessage + " \n message: " + message
                 )
-                throw exception
               case Right(_) =>
                 initialMessageProcessed = true
                 log.info("Successfully subscribed to websocket")

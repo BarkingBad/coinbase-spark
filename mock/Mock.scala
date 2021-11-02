@@ -14,7 +14,7 @@ import scala.collection.mutable.ListBuffer
 import java.time.temporal.ChronoUnit.{SECONDS, MILLIS, MINUTES}
 
 object Mock extends App:
-  val s = new WebSocketServer(new InetSocketAddress("0.0.0.0", 8025)):
+  val s = new WebSocketServer(new InetSocketAddress("mock", 8025)):
     override def onConnect(key: SelectionKey): Boolean = true
     override def onOpen(webSocket: WebSocket, clientHandshake: ClientHandshake): Unit =
       println("Opening connection...")
@@ -39,23 +39,18 @@ object Mock extends App:
       s.broadcast(msg(ts, p))
     }
 
-  def step(str: String, list: List[String] = Nil) =
-    println(str)
+  def step(str: Option[String] = None, list: List[Int] = Nil) =
+    println(str.getOrElse(s"Press ENTER to send the message with ${list.map(t => s"T0+${t}s").mkString(", ")} timestamps."))
     readLine()
-    sendFrames(list)
+    sendFrames(list.map(diff))
 
   def diff(n: Int) = now.plus(n, SECONDS).toString
 
-  val l1 = List(now.toString, diff(14), diff(7))
-  step("Press ENTER to send the first message with T0, T0+14s, T0+7s timestamps.", l1)
+  step(list = List(0, 14, 7))
+  step(list = List(15, 8, 21))
+  step(list = List(4, 17))
 
-  val l2 = List(diff(15), diff(8), diff(21))
-  step("Press ENTER to send second messages: with T0+15s, T0+8s, T0+21s timestamps", l2)
-
-  val l3 = List(diff(4), diff(17))
-  step("Press ENTER to send second messages: with T0+4s, T0+17s timestamps", l3)
-
-  step("Press ENTER to close WebSocket and exit.")
+  step(Some("Press ENTER to close WebSocket and exit."))
 
   s.getConnections().asScala.foreach(_.close(1000))
   s.stop(1000)
