@@ -14,7 +14,7 @@ import scala.collection.mutable.ListBuffer
 import java.time.temporal.ChronoUnit.{SECONDS, MILLIS, MINUTES}
 
 object Mock extends App:
-  val s = new WebSocketServer(new InetSocketAddress("coinbase-notebook", 8025)):
+  val s = new WebSocketServer(new InetSocketAddress("0.0.0.0", 8025)):
     override def onConnect(key: SelectionKey): Boolean = true
     override def onOpen(webSocket: WebSocket, clientHandshake: ClientHandshake): Unit =
       println("Opening connection...")
