@@ -1,5 +1,5 @@
 REPO_NAME='coinbase-spark'
-PREFIX='barkingbad'
+PREFIX='balis'
 
 all: push
 
