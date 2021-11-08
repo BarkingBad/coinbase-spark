@@ -23,7 +23,7 @@ object Mock extends App:
     override def onClose(webSocket: WebSocket, code: Int, reason: String, remote: Boolean): Unit = println("Conection has been closed.")
     override def onError(webSocket: WebSocket, ex: Exception): Unit = println(s"Error $ex")
     override def onMessage(webSocket: WebSocket, msg: String): Unit = println("Received message for subscription")
-    override def onStart(): Unit = println("Starting...")
+    override def onStart(): Unit = println("Starting. Waiting for subscriptions...")
   s.start()
 
   val now = java.time.Instant.parse("2021-11-01T12:00:00.123123Z")
@@ -39,18 +39,19 @@ object Mock extends App:
       s.broadcast(msg(ts, p))
     }
 
-  def step(str: Option[String] = None, list: List[Int] = Nil) =
-    println(str.getOrElse(s"Press ENTER to send the message with ${list.map(t => s"T0+${t}s").mkString(", ")} timestamps."))
-    readLine()
+  def step(list: List[Int]) =
+    println(s"Sending frames with ${list.map(t => s"T0+${t}s").mkString(", ")} timestamps.")
     sendFrames(list.map(diff))
 
   def diff(n: Int) = now.plus(n, SECONDS).toString
 
+  while s.getConnections.isEmpty do Thread.sleep(1000)
+
   step(list = List(0, 14, 7))
+  Thread.sleep(10000)
   step(list = List(15, 8, 21))
+  Thread.sleep(10000)
   step(list = List(4, 17))
 
-  step(Some("Press ENTER to close WebSocket and exit."))
-
-  s.getConnections().asScala.foreach(_.close(1000))
+  s.getConnections.asScala.foreach(_.close(1000))
   s.stop(1000)
