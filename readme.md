@@ -13,12 +13,10 @@ make run
 ```
 
 ## Run spark structured streaming query
-After running the docker container a link to jupiter notebook will be displayed.
-Without any extra configuration one starting with `http://127.0.0.1:8888...` should work.
+After running the Docker container, the link to a Jupyter notebook will be displayed, open it in a browser.
+Note that the current working directory will be mounted as a directory for Jupyter. 
 
-After opening jupiter notebook in your browser go to work folder and open `Notebook.ipynb`.
-It contains a fairly simple example on how to run a Spark Structured Streaming app from python.
-It is possible also to do the same thing with Scala or R, but you need to adjust the code in the notebook.
+Open `Notebook.ipynb` in Jupyter to see the assignmets. 
 
 Please keep in mind that you need to manually stop the session using `spark.stop()`.
 Even though some exceptions may occur this closes the websocket session correctly.
@@ -46,21 +44,19 @@ query.stop()
 spark.stop()
 ```
 
-If one start new query and accidentally lose the reference for it before stopping (e.g. python interpreter will fail on some instruction before stopping), he/she should kill spark session by explicitly calling `spark.stop()` in a new cell. Otherwise, the websockets will still be alive and will stream the data.
+If one starts a new query and accidentally loses the reference to it before stopping (e.g. python interpreter will fail on some instruction before stopping), he/she should kill spark session by explicitly calling `spark.stop()` in a new cell. Otherwise, the websockets will still be alive and will stream the data.
 
 ## Usage
 
-The libary exposes few channels from the [CoinBase WS API](https://docs.cloud.coinbase.com/exchange/docs/channels)
-Currently implemented channels are:
+The Docker image contains a package that implements a Websocket source for Spark Structure Streaming configured to work with [CoinBase Websocket API](https://docs.cloud.coinbase.com/exchange/docs/overview)
+which is a stream of Cryptocurrency trading transactions. The CoinBase streams are available via several [channels](https://docs.cloud.coinbase.com/exchange/docs/channels).
+
+You can use the following channels:
 - heartbeat
 - ticker
 - status
 - level2
 - auction
 
-To subscribe to specific channel one has to pass `schema` option value:
+To subscribe to a specific channel one has to pass `schema` option value:
 `spark.readStream.format("ws").option("schema", "ticker").load()`
-
-Some channels can be furtherly configured:
-
-
