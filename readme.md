@@ -1,4 +1,19 @@
-# CoinBase Spark
+# CoinBase Websocket source for Spark Structured Streaming
+
+## Overview
+
+This project builds a Docker image with Pyspark and a package that implements a Websocket source for Spark Structure Streaming configured to work with the [CoinBase Websocket API](https://docs.cloud.coinbase.com/exchange/docs/overview)
+which is a stream of Cryptocurrency trading transactions. The CoinBase streams are available via several [channels](https://docs.cloud.coinbase.com/exchange/docs/channels).
+
+You can use the following channels:
+- heartbeat
+- ticker
+- status
+- level2
+- auction
+
+To subscribe to a specific channel one has to pass `schema` option value:
+`spark.readStream.format("ws").option("schema", "ticker").load()`
 
 ## Build
 
@@ -15,8 +30,6 @@ make run
 ## Run spark structured streaming query
 After running the Docker container, the link to a Jupyter notebook will be displayed, open it in a browser.
 Note that the current working directory will be mounted as a directory for Jupyter. 
-
-Open `Notebook.ipynb` in Jupyter to see the assignmets. 
 
 Please keep in mind that you need to manually stop the session using `spark.stop()`.
 Even though some exceptions may occur this closes the websocket session correctly.
@@ -46,17 +59,6 @@ spark.stop()
 
 If one starts a new query and accidentally loses the reference to it before stopping (e.g. python interpreter will fail on some instruction before stopping), he/she should kill spark session by explicitly calling `spark.stop()` in a new cell. Otherwise, the websockets will still be alive and will stream the data.
 
-## Usage
 
-The Docker image contains a package that implements a Websocket source for Spark Structure Streaming configured to work with [CoinBase Websocket API](https://docs.cloud.coinbase.com/exchange/docs/overview)
-which is a stream of Cryptocurrency trading transactions. The CoinBase streams are available via several [channels](https://docs.cloud.coinbase.com/exchange/docs/channels).
-
-You can use the following channels:
-- heartbeat
-- ticker
-- status
-- level2
-- auction
-
-To subscribe to a specific channel one has to pass `schema` option value:
-`spark.readStream.format("ws").option("schema", "ticker").load()`
+## Assignments
+Open `Notebook.ipynb` in Jupyter to see the assignmets. 
