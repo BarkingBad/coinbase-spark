@@ -1,5 +1,5 @@
 REPO_NAME=ws-streamer
-PREFIX=barkingbad
+PREFIX=balis
 
 all: push
 
