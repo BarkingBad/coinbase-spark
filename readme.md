@@ -27,7 +27,7 @@ make image
 make run
 ```
 
-Open Jupyter in the browser: http://127.0.0.1:8888. Note that the current working directory will be mounted as a working directory for Jupyter. 
+Open Jupyter in the browser: http://127.0.0.1:8888. Note that the current working directory where `make run` was executed will be mounted as a working directory for Jupyter. 
 
 
 ## Assignments
