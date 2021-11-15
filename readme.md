@@ -17,12 +17,12 @@ To subscribe to a specific channel one has to pass `schema` option value:
 
 ## Build and Run
 
-- Build docker image
+- Build Docker image (optional, the image will be pulled from DockerHub)
 ```bash
 make image
 ```
 
-- Run docker
+- Run Docker container
 ```bash
 make run
 ```
