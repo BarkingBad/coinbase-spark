@@ -9,7 +9,7 @@ image:
 	docker build -t  $(PREFIX)/$(REPO_NAME) . # Build new image and automatically tag it as latest
 
 run:
-	docker run --rm --network="coin-net" --name mock -it $(PREFIX)/$(REPO_NAME):latest Mock.scala
+	docker run --rm --network="coin-net" --name mock -it $(PREFIX)/$(REPO_NAME):latest
 
 push: image
 	docker push $(PREFIX)/$(REPO_NAME) # Push image tagged as latest to repository

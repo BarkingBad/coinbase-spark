@@ -1,6 +1,6 @@
-// using scala 3.0.2
-// using lib org.java-websocket:Java-WebSocket:1.5.2
-// using lib org.slf4j:slf4j-simple:1.7.25
+//> using scala 3.0.2
+//> using dep org.java-websocket:Java-WebSocket:1.5.2
+//> using dep org.slf4j:slf4j-simple:1.7.25
 
 import scala.util._
 import scala.io.StdIn.readLine

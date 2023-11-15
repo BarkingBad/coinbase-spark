@@ -84,11 +84,11 @@ case class WSMicroBatchStreamer[T <: Product: TypeTag](
             // )
             // webSocket.send(Serializer(subscribeMessage))
             val jsonToSubscribe = schemaTag match {
-              case "heartbeat" => """{"type": "subscribe","channels": [{ "name": "heartbeat", "product_ids": ["ETH-EUR"] }]}"""
+              case "heartbeat" => """{"type": "subscribe","channels": [{ "name": "heartbeat", "product_ids": ["ETH-BTC","ETH-USD", "BTC-USD", "USD-BTC", "EUR-BTC", "BTC-EUR"] }]}"""
               case "status" => ""
-              case "ticker" => """{"type": "subscribe","channels": [{"name": "ticker","product_ids": ["ETH-BTC","ETH-USD"]}]}"""
+              case "ticker" => """{"type": "subscribe","channels": [{"name": "ticker","product_ids": ["ETH-BTC","ETH-USD", "BTC-USD", "USD-BTC", "EUR-BTC", "BTC-EUR"]}]}"""
               case "level2" => ""
-              case "auction" => """{"type": "auction","channels": [{ "name": "auctionfeed"}]}"""
+              case "auction" => """{"type": "auction","channels": [{ "name": "auctionfeed", "product_ids": ["ETH-BTC","ETH-USD", "BTC-USD", "USD-BTC", "EUR-BTC", "BTC-EUR"]}]}"""
             }
             webSocket.send(jsonToSubscribe)
           }
