@@ -4,7 +4,7 @@
 
 This project builds a Docker image with Pyspark and a package that implements a Websocket source for Spark Structure Streaming configured to work with the 
 [CoinBase Websocket API](https://docs.cloud.coinbase.com/exchange/docs/websocket-overview)
-which is a stream of Cryptocurrency trading transactions. The CoinBase streams are available via several [channels](https://docs.cloud.coinbase.com/exchange/docs/channels).
+which is a stream of Cryptocurrency trading transactions. The CoinBase streams are available via several [channels](https://docs.cdp.coinbase.com/exchange/docs/websocket-channels).
 
 You can use the following channels:
 - heartbeat
